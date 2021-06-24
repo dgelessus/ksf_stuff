@@ -23,7 +23,7 @@ def _escape_name_char(c):
 	if c.isprintable():
 		return c
 	else:
-		cp = chr(c)
+		cp = ord(c)
 		if 0xdc80 <= cp < 0xdd00:
 			# from surrogateescape
 			return f"[x{cp - 0xdc00:>02x}]"
