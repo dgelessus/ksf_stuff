@@ -105,7 +105,7 @@ def show_and_check_sums(parsed: InstallShield3Z) -> None:
 	if header.total_uncompressed_size != total_uncompressed:
 		print(f"Warning: total uncompressed size mismatch! Expected {header.total_uncompressed_size} bytes.", file=sys.stderr)
 	
-	if header.is_split or header.is_split_contiguous:
+	if header.is_extended:
 		# TODO Are modulo 253 checksums actually used?
 		checksum1 = total_compressed % 251
 		checksum2 = total_compressed % 253
@@ -138,11 +138,11 @@ def do_list_technical(parsed: InstallShield3Z, *, name_encoding: str) -> None:
 	rows_files = []
 	for file in parsed.toc_files:
 		flags = []
-		if file.internal_flag:
+		if file.flags.internal_flag:
 			flags.append("internal deleted flag")
-		if file.has_version:
+		if file.flags.has_version:
 			flags.append("has version")
-		if file.is_split:
+		if file.flags.is_split:
 			flags.append("split")
 		rows_files.append([
 			str(file.directory_index),
@@ -150,7 +150,7 @@ def do_list_technical(parsed: InstallShield3Z, *, name_encoding: str) -> None:
 			format_name_technical(file.name, name_encoding),
 			str(file.len_data_uncompressed),
 			str(file.len_data_compressed),
-			"Store" if file.is_uncompressed else "Implode",
+			"Store" if file.flags.is_uncompressed else "Implode",
 			format_dos_datetime(file.modified),
 			format_attributes_technical(file.attributes),
 			f"{file.start_part}..{file.end_part}",
@@ -208,7 +208,7 @@ def timestamp_from_dos_datetime(dos: DosDatetimeBackwards) -> int:
 	return datetime.datetime(dos.date.year, dos.date.month, dos.date.day, dos.time.hour, dos.time.minute, dos.time.second).timestamp()
 
 def extract_file_data(file: InstallShield3Z.TocFile, output_file: typing.BinaryIO) -> None:
-	if not file.is_uncompressed:
+	if not file.flags.is_uncompressed:
 		print(f"Error: Reading PKWARE DCL Implode-compressed files is not supported yet.", file=sys.stderr)
 		print(f"Note: Use the to-zip subcommand to convert this archive to ZIP format and try extracting it using an unzip program that supports PKWARE DCL Implode compression.", file=sys.stderr)
 		sys.exit(1)
@@ -273,9 +273,9 @@ def do_list(
 	
 	if technical:
 		print("Archive header technical details:")
-		if header.is_split:
+		if header.flags.is_split:
 			print("Split flag set")
-		if header.is_split_contiguous:
+		if header.flags.is_split_contiguous:
 			print("Split contiguous flag set")
 		print(f"len_archive: {header.len_archive:#x}")
 		print(f"start_integral_data: {header.start_integral_data:#x}")
@@ -483,12 +483,12 @@ def do_to_zip(
 				modified = pack_zip_date_time(file.modified)
 				
 				header_common = b""
-				header_common += (10 if file.is_uncompressed else 25).to_bytes(1, "little") # min. version to extract (2.5 if DCL Implode-compressed, 1.0 if stored)
+				header_common += (10 if file.flags.is_uncompressed else 25).to_bytes(1, "little") # min. version to extract (2.5 if DCL Implode-compressed, 1.0 if stored)
 				header_common += b"\x00" # attribute format (DOS)
 				header_common += b"\x00\x00" # flags (none needed)
-				header_common += (b"\x00\x00" if file.is_uncompressed else b"\x0a\x00") # compression method (stored or DCL Implode)
+				header_common += (b"\x00\x00" if file.flags.is_uncompressed else b"\x0a\x00") # compression method (stored or DCL Implode)
 				header_common += modified # modified
-				header_common += (zlib.crc32(file.data_compressed) if file.is_uncompressed else 0).to_bytes(4, "little") # CRC-32 (can't calculate this for DCL Implode-compressed data!)
+				header_common += (zlib.crc32(file.data_compressed) if file.flags.is_uncompressed else 0).to_bytes(4, "little") # CRC-32 (can't calculate this for DCL Implode-compressed data!)
 				header_common += file.len_data_compressed.to_bytes(4, "little") # compressed size
 				header_common += file.len_data_uncompressed.to_bytes(4, "little") # uncompressed size
 				header_common += len(path).to_bytes(2, "little") # name length
