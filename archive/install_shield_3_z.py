@@ -332,7 +332,7 @@ def do_read(
 		else:
 			print("Error: No top-level directory found in archive.", file=sys.stderr)
 			print("Note: To read a file from a subdirectory, use a full path including a directory name.", file=sys.stderr)
-		if "/" in member_name:
+		if "/" in path:
 			print("Note: Use \\ instead of / as the directory separator.", file=sys.stderr)
 		sys.exit(1)
 	
